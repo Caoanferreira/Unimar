@@ -1,0 +1,151 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+
+# --- 1. Importação e Organização dos Dados ---
+# Por favor, substitua 'caminho/para/seu/arquivo.csv' pelo caminho real do arquivo CSV que você baixou.
+# Exemplo: 'C:/Users/SeuUsuario/Downloads/EBT_3a_Edicao.csv' ou 'EBT_3a_Edicao.csv' se estiver na mesma pasta.
+try:
+    df = pd.read_csv('EBT_3a_Edicao.csv', encoding='utf-8', sep=';') # Ajuste o separador se necessário (',' ou ';')
+    print("Dados importados com sucesso!")
+    print(f"Número de linhas: {df.shape[0]}, Número de colunas: {df.shape[1]}")
+    print("\nPrimeiras 5 linhas do dataset:")
+    print(df.head())
+    print("\nInformações sobre as colunas e tipos de dados:")
+    print(df.info())
+except FileNotFoundError:
+    print("Erro: O arquivo 'EBT_3a_Edicao.csv' não foi encontrado.")
+    print("Por favor, certifique-se de que o caminho do arquivo está correto e que o arquivo foi baixado.")
+    print("Você pode baixar o arquivo em: https://www.gov.br/cgu/pt-br/acesso-a-informacao/dados-abertos/arquivos/ebt")
+    exit() # Sai do script se o arquivo não for encontrado
+except Exception as e:
+    print(f"Ocorreu um erro ao importar o arquivo: {e}")
+    print("Verifique o formato do arquivo (CSV) e o separador (sep=';' ou sep=',')")
+    exit()
+
+# --- 2. Limpeza e Preparação dos Dados ---
+
+# Renomear colunas para facilitar o uso (exemplo, ajuste conforme as colunas reais do seu CSV)
+# As colunas podem variar dependendo da versão exata do arquivo.
+# Este é um exemplo de renomeação. Verifique o `df.columns` após a importação.
+df.columns = df.columns.str.strip().str.replace(' ', '_').str.replace('.', '').str.lower()
+
+# Exemplo de renomeação de colunas comuns na EBT. Ajuste conforme o seu arquivo.
+# Se as colunas não existirem, este bloco pode gerar um erro. Comente ou ajuste conforme necessário.
+col_mapping = {
+    'ente_federativo': 'municipio_estado',
+    'uf': 'estado',
+    'tipo_ente': 'tipo_ente',
+    'populacao': 'populacao',
+    'nota_geral': 'nota_geral',
+    'nota_transparencia_ativa': 'nota_transparencia_ativa',
+    'nota_transparencia_passiva': 'nota_transparencia_passiva',
+    'ranking_geral': 'ranking_geral',
+    'ranking_uf': 'ranking_uf',
+    'regiao': 'regiao'
+}
+df = df.rename(columns=col_mapping)
+
+# Converter 'nota_geral' e outras notas para numérico, tratando erros
+for col in ['nota_geral', 'nota_transparencia_ativa', 'nota_transparencia_passiva']:
+    if col in df.columns:
+        # Substituir vírgula por ponto para conversão para float
+        df[col] = df[col].astype(str).str.replace(',', '.', regex=False)
+        df[col] = pd.to_numeric(df[col], errors='coerce')
+        # Preencher valores NaN (Not a Number) com a mediana ou média, ou remover
+        df[col].fillna(df[col].median(), inplace=True) # Preenche com a mediana
+
+# Converter 'populacao' para numérico
+if 'populacao' in df.columns:
+    df['populacao'] = pd.to_numeric(df['populacao'], errors='coerce')
+    df['populacao'].fillna(df['populacao'].median(), inplace=True) # Preenche com a mediana
+
+# Remover linhas com valores ausentes em colunas críticas (se houver)
+df.dropna(subset=['municipio_estado', 'estado', 'tipo_ente', 'nota_geral'], inplace=True)
+
+print("\nApós limpeza e preparação:")
+print(df.info())
+print("\nValores nulos após tratamento:")
+print(df.isnull().sum())
+
+# --- 3. Análise Exploratória com Resumo Estatístico e Gráficos ---
+
+print("\n--- Resumo Estatístico da Nota Geral ---")
+print(df['nota_geral'].describe())
+
+print("\n--- Notas Médias por Tipo de Ente ---")
+print(df.groupby('tipo_ente')['nota_geral'].mean().sort_values(ascending=False))
+
+print("\n--- Notas Médias por Região ---")
+print(df.groupby('regiao')['nota_geral'].mean().sort_values(ascending=False))
+
+print("\n--- Top 10 Entes Federativos com Maiores Notas Gerais ---")
+print(df.sort_values(by='nota_geral', ascending=False).head(10)[['municipio_estado', 'estado', 'nota_geral']])
+
+print("\n--- Top 10 Entes Federativos com Menores Notas Gerais ---")
+print(df.sort_values(by='nota_geral', ascending=True).head(10)[['municipio_estado', 'estado', 'nota_geral']])
+
+
+# Gráficos de Visualização
+
+plt.style.use('seaborn-v0_8-darkgrid') # Estilo mais moderno para os gráficos
+
+# Distribuição da Nota Geral
+plt.figure(figsize=(10, 6))
+sns.histplot(df['nota_geral'], bins=20, kde=True, color='skyblue')
+plt.title('Distribuição da Nota Geral da Escala Brasil Transparente', fontsize=16)
+plt.xlabel('Nota Geral', fontsize=12)
+plt.ylabel('Frequência', fontsize=12)
+plt.grid(axis='y', alpha=0.75)
+plt.show()
+
+# Box Plot da Nota Geral por Tipo de Ente
+plt.figure(figsize=(10, 6))
+sns.boxplot(x='tipo_ente', y='nota_geral', data=df, palette='viridis')
+plt.title('Box Plot da Nota Geral por Tipo de Ente', fontsize=16)
+plt.xlabel('Tipo de Ente', fontsize=12)
+plt.ylabel('Nota Geral', fontsize=12)
+plt.show()
+
+# Box Plot da Nota Geral por Região
+plt.figure(figsize=(12, 7))
+sns.boxplot(x='regiao', y='nota_geral', data=df, palette='plasma')
+plt.title('Box Plot da Nota Geral por Região', fontsize=16)
+plt.xlabel('Região', fontsize=12)
+plt.ylabel('Nota Geral', fontsize=12)
+plt.show()
+
+# Gráfico de Barras das Notas Médias por Estado (Top 15)
+plt.figure(figsize=(14, 8))
+avg_nota_estado = df.groupby('estado')['nota_geral'].mean().sort_values(ascending=False).head(15)
+sns.barplot(x=avg_nota_estado.index, y=avg_nota_estado.values, palette='coolwarm')
+plt.title('Top 15 Estados com Maiores Notas Médias de Transparência', fontsize=16)
+plt.xlabel('Estado', fontsize=12)
+plt.ylabel('Nota Média Geral', fontsize=12)
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+
+# Correlação entre Nota Geral e População (se a coluna 'populacao' estiver disponível e for numérica)
+if 'populacao' in df.columns:
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(x='populacao', y='nota_geral', data=df, alpha=0.6, color='purple')
+    plt.title('Correlação entre Nota Geral e População', fontsize=16)
+    plt.xlabel('População', fontsize=12)
+    plt.ylabel('Nota Geral', fontsize=12)
+    plt.xscale('log') # Usar escala logarítmica para população devido à grande variação
+    plt.grid(True, which="both", ls="--", c="0.7")
+    plt.show()
+    print(f"\nCoeficiente de Correlação entre Nota Geral e População: {df['nota_geral'].corr(df['populacao']):.2f}")
+
+# Comparação entre Transparência Ativa e Passiva
+if 'nota_transparencia_ativa' in df.columns and 'nota_transparencia_passiva' in df.columns:
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(x='nota_transparencia_ativa', y='nota_transparencia_passiva', data=df, alpha=0.6, color='teal')
+    plt.title('Comparação entre Nota de Transparência Ativa e Passiva', fontsize=16)
+    plt.xlabel('Nota de Transparência Ativa', fontsize=12)
+    plt.ylabel('Nota de Transparência Passiva', fontsize=12)
+    plt.grid(True, which="both", ls="--", c="0.7")
+    plt.show()
+    print(f"\nCoeficiente de Correlação entre Transparência Ativa e Passiva: {df['nota_transparencia_ativa'].corr(df['nota_transparencia_passiva']):.2f}")
